@@ -1,14 +1,23 @@
 project('Fast Calculator', ['cpp'],  default_options : ['buildtype=debugoptimized', 'c_std=c11', 'cpp_std=c++23'])
 
-cmake = import('cmake')
+add_project_arguments('-DPCRE2_CODE_UNIT_WIDTH=8', language : ['c', 'cpp'])
 
-fcalc = library('libfcalc', 'src/fcalc.cpp', include_directories: include_directories('include/fast_calc'))
+pcre = dependency('libpcre2-8', include_type : 'system')
 
-gbenchmark = dependency('benchmark')
-fmt = dependency('fmt')
+fmt = dependency('fmt', include_type : 'system')
 
-executable('calc', 'src/main.cpp',dependencies: [fmt, gbenchmark], include_directories : include_directories('include'), link_with: fcalc)
+fcalc = library('fcalc', ['src/fcalc.cpp', 'src/re.cpp'], 
+    dependencies: [pcre, fmt], include_directories: include_directories('include/fast_calc'))
+
+gbenchmark = dependency('benchmark', include_type : 'system')
+gtest = dependency('gtest', include_type : 'system')
+
+executable('calc', 'src/main.cpp',dependencies: [fmt, gbenchmark],
+    include_directories : include_directories('include'), link_with: fcalc)
 
 parse_bench = executable('parsing_benchmark', 'benchmarks/parse.cpp', dependencies: [fmt, gbenchmark],
     include_directories : include_directories('include'), link_with: fcalc)
 benchmark('parsing benchmark', parse_bench)
+
+executable('regex_test', 'tests/regex.cpp', dependencies: [fmt, gtest],
+    include_directories : include_directories('include'), link_with: fcalc)
