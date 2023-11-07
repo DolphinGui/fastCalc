@@ -1,11 +1,16 @@
-#include <fmt/core.h>
+#include <fmt/format.h>
 #include <span>
 #include <string_view>
 #include <vector>
 
-void main_fun(std::span<std::string_view> args);
+#include "fast_calc/fcalc.hpp"
 
+void main_fun(std::span<std::string_view> args);
 int main(int argc, char *argv[]) {
+  fcalc::Word arr[3]{};
+  arr[0] = fcalc::Word("a");
+  fmt::print("{}\n", arr[0]);
+
   std::vector<std::string_view> args;
   args.reserve(argc);
   for (int i = 0; i < argc; i++) {
@@ -15,10 +20,9 @@ int main(int argc, char *argv[]) {
   main_fun(args);
 }
 
-void main_fun(std::span<std::string_view> args){
-  if(args.size() == 0){
+void main_fun(std::span<std::string_view> args) {
+  if (args.size() == 0) {
     fmt::print("Please enter a file name\n");
-  }else{
-    
+  } else {
   }
 }

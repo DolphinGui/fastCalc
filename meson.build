@@ -1,6 +1,7 @@
 project('Fast Calculator', ['cpp'],  default_options : ['buildtype=debugoptimized', 'c_std=c11', 'cpp_std=c++23'])
 
 add_project_arguments('-DPCRE2_CODE_UNIT_WIDTH=8', language : ['c', 'cpp'])
+add_project_arguments('-DFCALC_FMT_FORMAT', language : ['c', 'cpp'])
 
 pcre = dependency('libpcre2-8', include_type : 'system')
 

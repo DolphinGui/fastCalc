@@ -1,139 +1,8 @@
 #pragma once
 
-#include <cstdint>
+#include "fcalc.hpp"
 #include <fmt/format.h>
-#include <span>
-#include <string>
-#include <vector>
 
-namespace fcalc {
-enum struct WordType : uint8_t {
-  Token,
-  Number,
-  Constant,
-  Variable,
-  Unary,
-  Binary,
-};
-struct Token {
-  const char *s;
-};
-struct Number {
-  int64_t num, den;
-};
-struct Constant {
-  enum struct Types { pi, e, tau, i } types;
-};
-struct Variable {
-  const char *s;
-};
-struct Unary {
-  enum struct Ops { minus, sqrt } op;
-};
-struct Binary {
-  enum struct Ops { add, sub, mult, div, exp, assign } op;
-};
-struct Word {
-  Word() : num{0, 0}, type(WordType::Number) {}
-  Word(Token &&t) : tok(std::move(t)), type{WordType::Token} {}
-  Word(Number &&t) : num(std::move(t)), type{WordType::Number} {}
-  Word(Constant &&t) : con(std::move(t)), type{WordType::Constant} {}
-  Word(Variable &&t) : var(std::move(t)), type{WordType::Variable} {}
-  Word(Unary &&t) : un(std::move(t)), type{WordType::Unary} {}
-  Word(Binary &&t) : bin(std::move(t)), type{WordType::Binary} {}
-  Word(std::string_view word) : tok(word.data()), type{WordType::Token} {}
-  Word(const Word &w) : type(w.type) {
-    switch (type) {
-    case WordType::Token:
-      tok = w.tok;
-      break;
-    case WordType::Number:
-      num = w.num;
-      break;
-    case WordType::Constant:
-      con = w.con;
-      break;
-    case WordType::Variable:
-      var = w.var;
-      break;
-    case WordType::Unary:
-      un = w.un;
-      break;
-    case WordType::Binary:
-      bin = w.bin;
-      break;
-    }
-  }
-
-  Word &operator=(const Word &other) {
-    this->~Word();
-    type = other.type;
-    switch (type) {
-    case WordType::Number:
-      num = other.num;
-      break;
-    case WordType::Constant:
-      con = other.con;
-      break;
-    case WordType::Unary:
-      un = other.un;
-      break;
-    case WordType::Binary:
-      bin = other.bin;
-      break;
-    case WordType::Token:
-      tok = other.tok;
-      break;
-    case WordType::Variable:
-      var = other.var;
-      break;
-    }
-    return *this;
-  }
-
-  ~Word() noexcept {
-    switch (type) {
-    case WordType::Token:
-      destroy(tok);
-      break;
-    case WordType::Number:
-      destroy(num);
-      break;
-    case WordType::Constant:
-      destroy(con);
-      break;
-    case WordType::Variable:
-      destroy(var);
-      break;
-    case WordType::Unary:
-      destroy(un);
-      break;
-    case WordType::Binary:
-      destroy(bin);
-      break;
-    }
-  }
-
-  union {
-    Token tok;
-    Number num;
-    Constant con;
-    Variable var;
-    Unary un;
-    Binary bin;
-  };
-
-  WordType type;
-
-private:
-  template <typename T> constexpr void destroy(T &v) noexcept { v.~T(); }
-};
-std::vector<Word> tokenize(std::string_view);
-void parse(std::span<Word> s);
-void resolve(std::span<Word> s);
-} // namespace fcalc
-
-#ifdef FCALC_FMT_FORMAT
 template <>
 struct fmt::formatter<fcalc::Token> : fmt::formatter<std::string_view> {
   constexpr auto format(const fcalc::Token &t, format_context &ctx) const
@@ -229,6 +98,22 @@ template <> struct fmt::formatter<fcalc::Binary> : formatter<std::string_view> {
   }
 };
 
+template <>
+struct fmt::formatter<fcalc::OpenParen> : formatter<std::string_view> {
+  constexpr auto format(const fcalc::OpenParen &, format_context &ctx) const
+      -> format_context::iterator {
+    return formatter<std::string_view>::format("(", ctx);
+  }
+};
+
+template <>
+struct fmt::formatter<fcalc::CloseParen> : formatter<std::string_view> {
+  constexpr auto format(const fcalc::CloseParen &, format_context &ctx) const
+      -> format_context::iterator {
+    return formatter<std::string_view>::format(")", ctx);
+  }
+};
+
 template <> struct fmt::formatter<fcalc::Word> : formatter<std::string_view> {
   constexpr auto format(const fcalc::Word &w, format_context &ctx) const
       -> format_context::iterator {
@@ -246,8 +131,11 @@ template <> struct fmt::formatter<fcalc::Word> : formatter<std::string_view> {
       return fmt::format_to(ctx.out(), "{}", w.un);
     case Binary:
       return fmt::format_to(ctx.out(), "{}", w.bin);
+    case OpenParen:
+      return fmt::format_to(ctx.out(), "{}", w.open);
+    case CloseParen:
+      return fmt::format_to(ctx.out(), "{}", w.close);
     }
     return fmt::format_to(ctx.out(), "?");
   }
 };
-#endif
