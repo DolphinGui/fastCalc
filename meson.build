@@ -20,5 +20,9 @@ parse_bench = executable('parsing_benchmark', 'benchmarks/parse.cpp', dependenci
     include_directories : include_directories('include'), link_with: fcalc)
 benchmark('parsing benchmark', parse_bench)
 
-executable('regex_test', 'tests/regex.cpp', dependencies: [fmt, gtest],
+regex_test = executable('regex_test', 'tests/regex.cpp', dependencies: [fmt, gtest],
     include_directories : include_directories('include'), link_with: fcalc)
+test( 'regex test', regex_test)
+fcalc_test = executable('fcalc_test', 'tests/fcalc.cpp', dependencies: [fmt, gtest],
+    include_directories : include_directories('include'), link_with: fcalc)
+test('calc test', fcalc_test)

@@ -7,10 +7,6 @@
 
 void main_fun(std::span<std::string_view> args);
 int main(int argc, char *argv[]) {
-  fcalc::Word arr[3]{};
-  arr[0] = fcalc::Word("a");
-  fmt::print("{}\n", arr[0]);
-
   std::vector<std::string_view> args;
   args.reserve(argc);
   for (int i = 0; i < argc; i++) {
