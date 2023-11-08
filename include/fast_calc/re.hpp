@@ -1,8 +1,6 @@
 #pragma once
 
-#include <compare>
 #include <cstddef>
-#include <span>
 #include <string_view>
 #include <utility>
 
@@ -93,27 +91,40 @@ struct MatchIterator {
     return start == nullptr && end == nullptr;
   }
 
-  MatchIterator &operator++();
-  MatchIterator operator++(int);
+  inline MatchIterator &operator++() {
+    match(false);
+    return *this;
+  }
+
+  inline MatchIterator operator++(int) {
+    this->operator++();
+    return *this;
+  }
 
 private:
-  MatchIterator(Matches &source, size_t *b, size_t *e);
+  MatchIterator(Matches &source, size_t *begin, size_t *end)
+      : start{begin}, end{end}, source(&source) {}
   MatchIterator(const MatchIterator &);
-  size_t *start, *end;
+  size_t *start{}, *end{};
   Matches *source{};
-
+  void match(bool is_first);
   friend struct Matches;
 };
 
 struct Matches {
   ~Matches();
+  Matches(Matches &&other)
+      : internal{other.internal}, pattern(other.pattern), string(other.string) {
+    other.internal = nullptr;
+    other.pattern = nullptr;
+  }
   MatchIterator begin();
   MatchEnd end();
 
+private:
   detail::MatchPtr *internal{};
   detail::PatternPtr *pattern{};
   std::string_view string;
-  int rc;
   Matches(detail::MatchPtr *i, detail::PatternPtr *pattern,
           std::string_view string)
       : internal{i}, pattern{pattern}, string{string} {}

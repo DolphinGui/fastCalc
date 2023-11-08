@@ -17,27 +17,13 @@ void rc_err(int rc) {
 namespace re {
 namespace detail {} // namespace detail
 
-#define match_ptr static_cast<pcre2_match_data *>(internal)
-// Matches::Matches(detail::PatternPtr *pattern) : pattern(pattern) {
-//   internal = pcre2_match_data_create_from_pattern(
-//       static_cast<pcre2_code *>(pattern), nullptr);
-//   if (!internal)
-//     throw std::runtime_error("Match data failed to construct.");
-// }
-
 Matches::~Matches() {
-  //  pcre2_match_data_free(match_ptr);
+  pcre2_match_data_free(static_cast<pcre2_match_data *>(internal));
 }
 
 MatchIterator Matches::begin() {
-  if (rc == PCRE2_ERROR_NOMATCH) {
-    return MatchIterator(*this, nullptr, nullptr);
-  } else if (rc < 0) {
-    rc_err(rc);
-  }
-  auto ovec = pcre2_get_ovector_pointer(match_ptr);
-  auto result = MatchIterator(*this, ovec, ovec + rc);
-  ++result;
+  auto result = MatchIterator(*this, nullptr, nullptr);
+  result.match(true);
   return result;
 }
 
@@ -47,24 +33,25 @@ MatchIterator::reference MatchIterator::operator*() const {
   return source->string.substr(start[0], start[1] - start[0]);
 }
 
-MatchIterator &MatchIterator::operator++() {
-  source->rc = pcre2_match(
+// this must be called first bc
+void MatchIterator::match(bool is_first) {
+  size_t offset = is_first ? 0 : start[1];
+  auto rc = pcre2_match(
       static_cast<pcre2_code *>(source->pattern),
       reinterpret_cast<const unsigned char *>(source->string.data()),
-      source->string.size(), start[1], {},
+      source->string.size(), offset, {},
       static_cast<pcre2_match_data *>(source->internal), nullptr);
-  if (source->rc == PCRE2_ERROR_NOMATCH) {
+  if (is_first) {
+    start = pcre2_get_ovector_pointer(
+        static_cast<pcre2_match_data *>(source->internal));
+    end = start + rc;
+  }
+  if (rc == PCRE2_ERROR_NOMATCH) {
     start = nullptr;
     end = nullptr;
-  } else if (source->rc < 0) {
-    rc_err(source->rc);
+  } else if (rc < 0) {
+    rc_err(rc);
   }
-  return *this;
-}
-
-MatchIterator MatchIterator::operator++(int) {
-  this->operator++();
-  return *this;
 }
 
 // this basically always returns true
@@ -76,9 +63,6 @@ MatchIterator::MatchIterator(const MatchIterator &other)
     : start{other.start}, end{other.end}, source(other.source) {}
 
 MatchEnd Matches::end() { return MatchEnd{}; }
-
-MatchIterator::MatchIterator(Matches &source, size_t *begin, size_t *end)
-    : start{begin}, end{end}, source(&source) {}
 
 #define pattern_ptr static_cast<pcre2_code *>(internal)
 
@@ -96,9 +80,7 @@ Pattern::Pattern(std::string_view pattern, Options options) {
                                    reinterpret_cast<char *>(message)));
   }
 }
-Pattern::~Pattern() {
-  // pcre2_code_free(pattern_ptr);
-}
+Pattern::~Pattern() { pcre2_code_free(pattern_ptr); }
 
 Matches Pattern::match(std::string_view str) {
   auto data = pcre2_match_data_create_from_pattern(
