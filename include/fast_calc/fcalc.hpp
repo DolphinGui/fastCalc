@@ -17,6 +17,7 @@ enum struct WordType : uint8_t {
 };
 struct Token {
   const char *s;
+  size_t size{};
 };
 struct Number {
   int64_t num, den;
@@ -26,6 +27,7 @@ struct Constant {
 };
 struct Variable {
   const char *s;
+  size_t size{};
 };
 struct Unary {
   enum struct Ops { minus, sqrt } op;
@@ -41,7 +43,8 @@ struct Word {
   Word(Variable &&t) : var(std::move(t)), type{WordType::Variable} {}
   Word(Unary &&t) : un(std::move(t)), type{WordType::Unary} {}
   Word(Binary &&t) : bin(std::move(t)), type{WordType::Binary} {}
-  Word(std::string_view word) : tok(word.data()), type{WordType::Token} {}
+  Word(std::string_view word)
+      : tok{word.data(), word.size()}, type{WordType::Token} {}
   Word(const Word &w) : type(w.type) {
     switch (type) {
     case WordType::Token:
@@ -138,7 +141,7 @@ template <>
 struct fmt::formatter<fcalc::Token> : fmt::formatter<std::string_view> {
   constexpr auto format(const fcalc::Token &t, format_context &ctx) const
       -> format_context::iterator {
-    return formatter<string_view>::format(t.s, ctx);
+    return formatter<string_view>::format(std::string_view(t.s, t.size), ctx);
   }
 };
 
@@ -180,7 +183,7 @@ template <>
 struct fmt::formatter<fcalc::Variable> : fmt::formatter<std::string> {
   constexpr auto format(const fcalc::Variable &v, format_context &ctx) const
       -> format_context::iterator {
-    return fmt::format_to(ctx.out(), "({})", v.s);
+    return fmt::format_to(ctx.out(), "({})", std::string_view(v.s, v.size));
   }
 };
 
