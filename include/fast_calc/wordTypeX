@@ -1,0 +1,6 @@
+X(Token, tok)
+X(Number, num)
+X(Constant, con)
+X(Variable, var)
+X(Unary, un)
+X(Binary, bin)
