@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <cstring>
 #include <fmt/format.h>
 #include <span>
 #include <stdexcept>
@@ -14,6 +13,17 @@ enum struct WordType : uint8_t {
 #include "wordTypeX"
 };
 #undef X
+inline const char *format_as(WordType t) noexcept {
+  using enum WordType;
+#define X(Type, _)                                                             \
+  case Type:                                                                   \
+    return #Type;
+  switch (t) {
+#include "wordTypeX"
+  }
+#undef X
+}
+
 inline bool is_value(WordType w) noexcept {
   using enum WordType;
   return w == Number || w == Constant || w == Variable;
@@ -35,8 +45,8 @@ struct Token {
   bool operator==(const Token &t) const noexcept { return s == t.s; }
 };
 struct Number {
-  int64_t num;
-  uint64_t den;
+  uint64_t num;
+  int64_t den;
   bool operator==(const Number &t) const noexcept {
     return num == t.num && den == t.den;
   }
@@ -70,19 +80,52 @@ struct Unary {
   bool operator==(const Unary &t) const noexcept { return op == t.op; }
 };
 struct Binary {
-  enum struct Ops { add, sub, mult, div, exp, assign } op;
+  enum Ops : uint8_t {
+    assign,
+    add,
+    sub,
+    mul,
+    div,
+    exp,
+  } op;
+  friend inline std::string_view format_as(Ops o) noexcept {
+    switch (o) {
+    case assign:
+      return "assign";
+    case add:
+      return "add";
+    case sub:
+      return "sub";
+    case mul:
+      return "mul";
+    case div:
+      return "div";
+    case exp:
+      return "exp";
+    default:
+      return "unknown";
+    }
+  }
+  // this is an offset that points to the second argument
+  // ie + 2e 1, second_arg = 3
+  uint8_t second_arg{};
   Binary() = default;
   Binary(Ops t) : op(t) {}
   bool operator==(const Binary &t) const noexcept { return op == t.op; }
 };
+
 struct Word {
   Word() : num{0, 0}, type(WordType::Number) {}
-  Word(Token &&t) : tok(std::move(t.s)), type{WordType::Token} {}
-  Word(Number &&t) : num(std::move(t)), type{WordType::Number} {}
-  Word(Constant &&t) : con(std::move(t)), type{WordType::Constant} {}
-  Word(Variable &&t) : var(std::move(t.s)), type{WordType::Variable} {}
-  Word(Unary &&t) : un(std::move(t)), type{WordType::Unary} {}
-  Word(Binary &&t) : bin(std::move(t)), type{WordType::Binary} {}
+
+#define X(Type, member)                                                        \
+  Word(Type &&t) : member(std::move(t)), type(WordType::Type) {}
+#include "wordTypeX"
+#undef X
+#define X(Type, member)                                                        \
+  Word(const Type &t) : member(t), type(WordType::Type) {}
+#include "wordTypeX"
+#undef X
+
   Word(std::string_view word) : tok(word), type{WordType::Token} {}
   // this can be done by macros
 
@@ -126,6 +169,15 @@ struct Word {
   Word &operator=(const Word &other) {
     this->~Word();
     new (this) Word(other);
+    return *this;
+  }
+
+  // this cannot use std::swap bc swap uses this method internally
+  Word &operator=(Word &&other) {
+    auto tmp = *this;
+    this->~Word();
+    new (this) Word(std::move(other));
+    new (&other) Word(std::move(tmp));
     return *this;
   }
 
@@ -236,7 +288,7 @@ template <> struct fmt::formatter<fcalc::Binary> : formatter<std::string_view> {
     case sub:
       result = "-";
       break;
-    case mult:
+    case mul:
       result = "*";
       break;
     case div:
