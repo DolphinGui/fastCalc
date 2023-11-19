@@ -11,5 +11,4 @@ int main() {
   auto a = fcalc::tokenize(input);
   fcalc::parse(a);
   fmt::print("out: {}\n", fmt::join(a, " "));
-  fmt::print("{} offset: {}\n", a[8], a[8].bin.second_arg);
 }

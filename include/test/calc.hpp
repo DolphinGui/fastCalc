@@ -128,7 +128,7 @@ struct Unary : Word {
 };
 
 struct Binary : Word {
-  enum Ops : uint8_t {
+  enum struct Ops : int8_t {
     assign,
     add,
     sub,
@@ -136,25 +136,6 @@ struct Binary : Word {
     div,
     exp,
   } op;
-
-  friend inline std::string_view format_as(Ops o) noexcept {
-    switch (o) {
-    case assign:
-      return "assign";
-    case add:
-      return "add";
-    case sub:
-      return "sub";
-    case mul:
-      return "mul";
-    case div:
-      return "div";
-    case exp:
-      return "exp";
-    default:
-      return "unknown";
-    }
-  }
 
   Binary() = default;
   Binary(Ops t) : op(t) {}
@@ -189,8 +170,8 @@ struct Binary : Word {
 };
 
 std::vector<WordPtr> tokenize(std::string_view);
-WordPtr parse(std::span<WordPtr> s);
-void resolve(std::span<WordPtr> s);
+WordPtr parse(std::vector<WordPtr> s);
+WordPtr resolve(WordPtr s);
 } // namespace calc
 
 #ifdef FCALC_FMT_FORMAT
@@ -217,6 +198,35 @@ template <> struct fmt::formatter<calc::WordPtr> : fmt::formatter<std::string> {
       return fmt::formatter<std::string>::format(a->format(), ctx);
     else
       return fmt::formatter<std::string>::format("", ctx);
+  }
+};
+
+template <>
+struct fmt::formatter<calc::Binary::Ops> : fmt::formatter<std::string_view> {
+  constexpr auto format(calc::Binary::Ops a, format_context &ctx) const {
+    std::string_view val = "?";
+    switch (a) {
+      using enum calc::Binary::Ops;
+    case assign:
+      val = "assign";
+      break;
+    case add:
+      val = "add";
+      break;
+    case sub:
+      val = "sub";
+      break;
+    case mul:
+      val = "mul";
+      break;
+    case div:
+      val = "div";
+      break;
+    case exp:
+      val = "exp";
+      break;
+    }
+    return fmt::formatter<std::string_view>::format(val, ctx);
   }
 };
 
