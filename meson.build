@@ -7,8 +7,11 @@ pcre = dependency('libpcre2-8', include_type : 'system')
 
 fmt = dependency('fmt', include_type : 'system')
 
-fcalc = library('fcalc', ['src/fcalc.cpp', 'src/re.cpp'], 
-    dependencies: [pcre, fmt], include_directories: include_directories('include/fast_calc'))
+re = library('re', ['src/re.cpp'], dependencies: [pcre], include_directories: include_directories('include'))
+fcalc = library('fcalc', ['src/fcalc.cpp'], 
+    dependencies: [fmt], include_directories: include_directories(['include/fast_calc', 'include']), link_with: re)
+calc = library('calc', ['src/calc.cpp'], 
+    dependencies: [fmt], include_directories: include_directories('include/test', 'include'), link_with: re)
 
 gbenchmark = dependency('benchmark', include_type : 'system')
 gtest = dependency('gtest', include_type : 'system')
@@ -16,8 +19,8 @@ gtest = dependency('gtest', include_type : 'system')
 executable('calc', 'src/main.cpp',dependencies: [fmt, gbenchmark],
     include_directories : include_directories('include'), link_with: fcalc)
 
-parse_bench = executable('parsing_benchmark', 'benchmarks/parse.cpp', dependencies: [fmt, gbenchmark],
-    include_directories : include_directories('include'), link_with: fcalc)
+parse_bench = executable('parsing_benchmark', 'tests/parse_bench.cpp', dependencies: [fmt, gbenchmark],
+    include_directories : include_directories('include'), link_with: [fcalc, calc])
 benchmark('parsing benchmark', parse_bench)
 
 regex_test = executable('regex_test', 'tests/regex.cpp', dependencies: [fmt, gtest],
@@ -25,4 +28,7 @@ regex_test = executable('regex_test', 'tests/regex.cpp', dependencies: [fmt, gte
 test( 'regex test', regex_test)
 fcalc_test = executable('fcalc_test', 'tests/fcalc.cpp', dependencies: [fmt, gtest],
     include_directories : include_directories('include'), link_with: fcalc)
-test('calc test', fcalc_test)
+test('fcalc test', fcalc_test)
+calc_test = executable('calc_test', 'tests/calc.cpp', dependencies: [fmt, gtest],
+    include_directories : include_directories('include'), link_with: calc)
+test('calc test', calc_test)

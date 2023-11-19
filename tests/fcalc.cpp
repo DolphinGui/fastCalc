@@ -2,11 +2,14 @@
 #include <fmt/ranges.h>
 
 int main() {
-  std::string input = "v = 3 * 2 + 1 - aπb ^ 2 / pi";
-  // v = 3 * 2 + 1 - aπb ^ 2 / pi
-  // = v + * 3 2 - 1 / ^ aπb 2 pi
+  std::string input = "v = 3 * 2 + 1 - aπb ^ 2 / i";
+  // v = 3 * 2 + 1 - aπb ^ 2 / i
+  // v = 3 * 2 + 1 - aπ ^ b 2 / i
+  // v = * 3 2 + 1 - aπ / ^ b 2 i
+  // v = + * 3 2 - 1 aπ / ^ b 2 i
+  // = v + * 3 2 - 1 aπ / ^ b 2 i
   auto a = fcalc::tokenize(input);
   fcalc::parse(a);
   fmt::print("out: {}\n", fmt::join(a, " "));
-  fmt::print("{} offset: {}\n", a[9], a[9].bin.second_arg);
+  fmt::print("{} offset: {}\n", a[8], a[8].bin.second_arg);
 }

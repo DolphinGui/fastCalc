@@ -124,33 +124,49 @@ Word parse_token(const Word &w) {
 // the algorithm basically implements a binary-search-like pattern,
 // dividing it up from weakest operand to strongest
 inline void bin_prefix(std::span<Word> terms, std::span<Word>::iterator op,
-                       Binary::Ops optype, std::span<Word> fulldebug) {
+                       Binary::Ops optype) {
   auto left = std::span(terms.begin(), op);
-  for (auto lop = optype; lop < Binary::Ops::exp + 1;
-       lop = static_cast<Binary::Ops>(lop + 1)) {
-    auto pivot = std::ranges::find_if(left, [&](auto &&t) {
-      return t.type == WordType::Binary && t.bin.op == lop;
-    });
-    if (pivot != left.end()) {
-      bin_prefix(left, pivot, lop, fulldebug);
-      break;
-    }
-  }
   auto right = std::span(op + 1, terms.end());
-  for (auto rop = optype; rop < Binary::Ops::exp + 1;
-       rop = static_cast<Binary::Ops>(rop + 1)) {
-    auto pivot = std::ranges::find_if(right, [&](auto &&t) {
-      return t.type == WordType::Binary && t.bin.op == rop;
-    });
-    if (pivot != right.end()) {
-      bin_prefix(right, pivot, rop, fulldebug);
-      break;
+
+  auto recurse = [&](auto &range) {
+    for (auto op_t = optype; op_t < Binary::Ops::exp + 1;
+         op_t = static_cast<Binary::Ops>(op_t + 1)) {
+      auto pivot = std::ranges::find_if(range, [&](auto &&t) {
+        return t.type == WordType::Binary && t.bin.op == op_t;
+      });
+      if (pivot != range.end()) {
+        bin_prefix(range, pivot, op_t);
+        break;
+      }
+    }
+  };
+
+  recurse(left);
+  recurse(right);
+  if (optype == Binary::Ops::div) {
+    fmt::print("div terms: {}\n", fmt::join(terms, " "));
+  }
+  if (optype != Binary::Ops::exp) {
+    op->bin.second_arg = std::distance(terms.begin(), op) + 1;
+    std::ranges::rotate(std::span(terms.begin(), op + 1), op);
+  } else {
+    op->bin.second_arg = 2;
+    std::swap(*op, op[-1]);
+  }
+}
+auto find_smallest(std::span<Word> s) {
+  std::span<Word>::iterator smallest = s.begin() + 1;
+  for (auto it = s.begin() + 1; it != s.end(); ++it) {
+    if (it->type == WordType::Binary) {
+      if (smallest->type != WordType::Binary) {
+        smallest = it;
+      } else if (std::to_underlying(it->bin.op) <
+                 std::to_underlying(smallest->bin.op))
+        smallest = it;
     }
   }
-  op->bin.second_arg = std::distance(terms.begin(), op) + 1;
-  std::ranges::rotate(std::span(terms.begin(), op + 1), op);
+  return smallest;
 }
-
 } // namespace
 void parse(std::span<Word> s) {
   for (auto &w : s) {
@@ -166,18 +182,9 @@ void parse(std::span<Word> s) {
     }
   }
   if (s.size() >= 3) {
-    auto smallest = std::ranges::min_element(s, [](auto &&a, auto &&b) {
-      auto a_bin = a.type != WordType::Binary;
-      auto b_bin = b.type != WordType::Binary;
-      if (a_bin && !b_bin) {
-        return false;
-      } else if (!a_bin && b_bin)
-        return true;
-      else if (!a_bin && !b_bin)
-        return false;
-      return std::to_underlying(a.type) < std::to_underlying(b.type);
-    });
-    bin_prefix(s, smallest, Binary::Ops::assign, s);
+    auto smallest = find_smallest(s);
+    fmt::print("smallest: {}\n", *smallest);
+    bin_prefix(s, smallest, smallest->bin.op);
   }
 }
 void resolve(std::span<Word> s);

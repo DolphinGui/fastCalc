@@ -88,6 +88,7 @@ struct Binary {
     div,
     exp,
   } op;
+
   friend inline std::string_view format_as(Ops o) noexcept {
     switch (o) {
     case assign:
@@ -106,6 +107,7 @@ struct Binary {
       return "unknown";
     }
   }
+
   // this is an offset that points to the second argument
   // ie + 2e 1, second_arg = 3
   uint8_t second_arg{};
@@ -172,12 +174,14 @@ struct Word {
     return *this;
   }
 
-  // this cannot use std::swap bc swap uses this method internally
+  friend void swap(Word &a, Word &b) {
+    auto tmp = Word(a);
+    a = b;
+    b = tmp;
+  }
+
   Word &operator=(Word &&other) {
-    auto tmp = *this;
-    this->~Word();
-    new (this) Word(std::move(other));
-    new (&other) Word(std::move(tmp));
+    swap(*this, other);
     return *this;
   }
 
