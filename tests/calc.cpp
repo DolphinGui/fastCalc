@@ -14,12 +14,21 @@ void print_recurse(calc::Word *w) {
 } // namespace
 
 int main() {
-  std::string input = "v = 3 * 2 + 1 - aπb ^ 2 / i";
+  constexpr const char *input =
+      "41^504/"
+      "52+tautautau-3313-tautautauipi-41-tautautaupii^"
+      "41/287^i+41^41/53/"
+      "54*pipipi+itaupitautau^tauipi*64/i+64+14+itaupi/"
+      "tau*75*ipitaupipi-tautautauipi+86/"
+      "643^ipitauii-74/"
+      "ipii*iitautaui^63";
 
   auto a = calc::tokenize(input);
-  fmt::print("pre:  {}\n", fmt::join(a, " "));
-  auto b = calc::parse(std::move(a));
+
+
+  fmt::print("a:  {}\n", fmt::join(a, " "));
+  auto root = calc::parse(std::move(a));
   fmt::print("out: ");
-  print_recurse(b.get());
+  print_recurse(root.get());
   fmt::print("\n");
 }

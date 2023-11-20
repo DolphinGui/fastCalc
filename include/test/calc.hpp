@@ -20,8 +20,6 @@ struct Word {
   WordPtr child;
 };
 
-WordPtr WordFactory(std::string_view s);
-
 struct Token : Word {
   std::string s;
   Token(std::string &&s) : s(std::move(s)) {}

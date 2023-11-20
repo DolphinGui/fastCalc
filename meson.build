@@ -3,15 +3,18 @@ project('Fast Calculator', ['cpp'],  default_options : ['buildtype=debugoptimize
 add_project_arguments('-DPCRE2_CODE_UNIT_WIDTH=8', language : ['c', 'cpp'])
 add_project_arguments('-DFCALC_FMT_FORMAT', language : ['c', 'cpp'])
 
-pcre = dependency('libpcre2-8', include_type : 'system')
+cmake = import('cmake')
+
+ctre_proj = cmake.subproject('ctre')
+ctre = ctre_proj.dependency('ctre')
+
 
 fmt = dependency('fmt', include_type : 'system')
 
-re = library('re', ['src/re.cpp'], dependencies: [pcre], include_directories: include_directories('include'))
 fcalc = library('fcalc', ['src/fcalc.cpp'], 
-    dependencies: [fmt], include_directories: include_directories(['include/fast_calc', 'include']), link_with: re)
+    dependencies: [fmt, ctre], include_directories: include_directories(['include/fast_calc', 'include']))
 calc = library('calc', ['src/calc.cpp'], 
-    dependencies: [fmt], include_directories: include_directories('include/test', 'include'), link_with: re)
+    dependencies: [fmt, ctre], include_directories: include_directories('include/test', 'include'))
 
 gbenchmark = dependency('benchmark', include_type : 'system')
 gtest = dependency('gtest', include_type : 'system')
@@ -23,7 +26,7 @@ parse_bench = executable('parsing_benchmark', 'tests/parse_bench.cpp', dependenc
     include_directories : include_directories('include'), link_with: [fcalc, calc])
 benchmark('parsing benchmark', parse_bench)
 
-regex_test = executable('regex_test', 'tests/regex.cpp', dependencies: [fmt, gtest],
+regex_test = executable('regex_test', 'tests/regex.cpp', dependencies: [fmt, gtest, ctre],
     include_directories : include_directories('include'), link_with: fcalc)
 test( 'regex test', regex_test)
 fcalc_test = executable('fcalc_test', 'tests/fcalc.cpp', dependencies: [fmt, gtest],

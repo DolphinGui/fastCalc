@@ -1,104 +1,31 @@
 #include "calc.hpp"
-#include "re.hpp"
 
-#include "fmt/format.h"
-#include "fmt/ranges.h"
 #include <algorithm>
+#include <charconv>
+#include <cstdint>
 #include <ranges>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
 
+#include <ctre-unicode.hpp>
+
 namespace calc {
-std::vector<WordPtr> tokenize(std::string_view input) {
-  std::vector<WordPtr> result;
-  auto p = re::Pattern(R"((?:\d+)(?:.\d+)?|[+\-*/^()ie=]|pi|tau|\S)",
-                       re::Options::ucp | re::Options::utf);
-  result.reserve(20);
-  for (auto match : p.match(input)) {
-    result.push_back(WordFactory(match));
-  }
-  return result;
-}
-
 namespace {
-
-int interp_digit(char c) {
-  switch (c) {
-  case '0':
-    return 0;
-  case '1':
-    return 1;
-  case '2':
-    return 2;
-  case '3':
-    return 3;
-  case '4':
-    return 4;
-  case '5':
-    return 5;
-  case '6':
-    return 6;
-  case '7':
-    return 7;
-  case '8':
-    return 8;
-  case '9':
-    return 9;
-  case '.':
-    return -2;
-  default:
-    return -1;
-  }
+Binary *bin_cast(WordPtr &w) { return dynamic_cast<Binary *>(w.get()); }
+inline auto str_cast(std::u8string_view str) noexcept {
+  return std::string_view(reinterpret_cast<const char *>(str.data()),
+                          str.size());
 }
-struct Result {
-  bool is_number;
-  Number n;
+inline auto str_cast(std::string_view str) noexcept {
+  return std::u8string_view(reinterpret_cast<const char8_t *>(str.data()),
+                            str.size());
+}
+auto makeWordPtr(auto &&tok) {
+  using T = std::remove_cvref_t<decltype(tok)>;
+  return WordPtr(new T(std::move(tok)));
 };
-
-Result parse_number(std::string_view sv) {
-  Number num{0, 1};
-  auto iterator = sv.begin();
-  if (*iterator == '-') {
-    num.den = -1;
-    ++iterator;
-  }
-  {
-    auto c = interp_digit(*iterator++);
-    if (c == -1)
-      return {false};
-    num.num += c;
-    while (iterator != sv.end()) {
-      int c = interp_digit(*iterator++);
-      if (c == -2)
-        break;
-      num.num += c;
-      num.num *= 10;
-    }
-  }
-  while (iterator != sv.end()) {
-    int c = interp_digit(*iterator++);
-    num.num += c;
-    num.num *= 10;
-    num.den *= 10;
-  }
-  return Result{true, std::move(num)};
-}
-
-Binary *bin_cast(WordPtr &w) { return dynamic_cast<Binary *>(w.get()); };
-
-} // namespace
-
-WordPtr WordFactory(std::string_view tok) {
-  auto makeWordPtr = [](auto &&tok) {
-    using T = std::remove_cvref_t<decltype(tok)>;
-    return WordPtr(new T(std::move(tok)));
-  };
-  auto result = parse_number(tok);
-  if (result.is_number) {
-    return makeWordPtr(std::move(result.n));
-  }
-
+WordPtr makeCon(std::string_view tok) {
   if (tok == "pi" || tok == "π") {
     return makeWordPtr(Constant(Constant::Types::pi));
   } else if (tok == "e") {
@@ -107,7 +34,11 @@ WordPtr WordFactory(std::string_view tok) {
     return makeWordPtr(Constant(Constant::Types::tau));
   } else if (tok == "i") {
     return makeWordPtr(Constant(Constant::Types::i));
-  } else if (tok == "+") {
+  }
+  throw std::runtime_error("Unexpected token");
+}
+WordPtr makeOp(std::string_view tok) {
+  if (tok == "+") {
     return makeWordPtr(Binary(Binary::Ops::add));
   } else if (tok == "-") {
     return makeWordPtr(Binary(Binary::Ops::sub));
@@ -122,7 +53,71 @@ WordPtr WordFactory(std::string_view tok) {
   } else if (tok == "√") {
     return makeWordPtr(Unary(Unary::Ops::sqrt));
   }
-  return makeWordPtr(Variable(tok));
+  throw std::runtime_error("Unexpected token");
+}
+WordPtr makeVar(std::string_view tok) { return WordPtr(new Variable(tok)); }
+WordPtr makeNum(std::string_view num) {
+  uint64_t val;
+  auto result = std::from_chars(num.data(), num.data() + num.size(), val);
+  if (result.ec != std::errc{}) {
+    throw std::runtime_error("number parsing failed");
+  }
+  return WordPtr(new Number(val, 1));
+}
+
+int decimal_places(uint64_t i) {
+  int dec = 0;
+  while (i != 0) {
+    i %= 10;
+    ++dec;
+  }
+  return dec;
+}
+uint64_t ipow10(uint64_t b, uint64_t e) {
+  while (e != 0) {
+    b *= 10;
+    --e;
+  }
+  return b;
+}
+WordPtr makeDec(std::string_view num, std::string_view den) {
+  uint64_t n;
+  auto result = std::from_chars(num.data(), num.data() + num.size(), n);
+  if (result.ec != std::errc{}) {
+    throw std::runtime_error("number parsing failed");
+  }
+  uint64_t d;
+  result = std::from_chars(num.data(), num.data() + num.size(), d);
+  if (result.ec != std::errc{}) {
+    throw std::runtime_error("number parsing failed");
+  }
+  auto dec = decimal_places(d);
+  return WordPtr(new Number(ipow10(n, dec) + d, dec));
+}
+} // namespace
+
+std::vector<WordPtr> tokenize(std::string_view input) {
+  std::vector<WordPtr> result;
+  constexpr auto tokenize =
+      ctre::range<R"((\d+)(?:\.(\d+))?|([+\-*/^()=√])|(pi|tau|[ieπτ])|(\S))">;
+  result.reserve(20);
+  for (auto &&match : tokenize(str_cast(input))) {
+    if (auto num = match.get<1>()) {
+      auto den = match.get<2>();
+      if (!den) {
+        result.push_back(makeNum(str_cast(num)));
+      } else {
+        result.push_back(makeDec(str_cast(num), str_cast(den)));
+      }
+    } else if (auto op = match.get<3>()) {
+      result.push_back(makeOp(str_cast(op)));
+    } else if (auto constant = match.get<4>()) {
+      result.push_back(makeCon(str_cast(constant)));
+    } else if (auto var = match.get<5>()) {
+      result.push_back(makeVar(str_cast(constant)));
+    }
+  }
+  return result;
 }
 
 WordPtr parse(std::vector<WordPtr> s) {

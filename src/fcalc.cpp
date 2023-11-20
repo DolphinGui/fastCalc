@@ -1,8 +1,8 @@
 #include "fcalc.hpp"
-#include "re.hpp"
+#include "ctre-unicode.hpp"
 
 #include <algorithm>
-#include <fmt/ranges.h>
+#include <charconv>
 #include <iterator>
 #include <pcre2.h>
 #include <ranges>
@@ -11,114 +11,109 @@
 #include <utility>
 
 namespace fcalc {
+
+namespace {
+inline auto str_cast(std::u8string_view str) noexcept {
+  return std::string_view(reinterpret_cast<const char *>(str.data()),
+                          str.size());
+}
+inline auto str_cast(std::string_view str) noexcept {
+  return std::u8string_view(reinterpret_cast<const char8_t *>(str.data()),
+                            str.size());
+}
+
+Word makeCon(std::string_view tok) {
+  if (tok == "pi" || tok == "π") {
+    return Constant(Constant::Types::pi);
+  } else if (tok == "e") {
+    return Constant(Constant::Types::e);
+  } else if (tok == "tau" || tok == "τ") {
+    return Constant(Constant::Types::tau);
+  } else if (tok == "i") {
+    return Constant(Constant::Types::i);
+  }
+  throw std::runtime_error("Unexpected token");
+}
+Word makeOp(std::string_view tok) {
+  if (tok == "+") {
+    return Binary(Binary::Ops::add);
+  } else if (tok == "-") {
+    return Binary(Binary::Ops::sub);
+  } else if (tok == "/") {
+    return Binary(Binary::Ops::div);
+  } else if (tok == "*") {
+    return Binary(Binary::Ops::mul);
+  } else if (tok == "^") {
+    return Binary(Binary::Ops::exp);
+  } else if (tok == "=") {
+    return Binary(Binary::Ops::assign);
+  } else if (tok == "√") {
+    return Unary(Unary::Ops::sqrt);
+  }
+  throw std::runtime_error("Unexpected token");
+}
+Word makeNum(std::string_view num) {
+  uint64_t val;
+  auto result = std::from_chars(num.data(), num.data() + num.size(), val);
+  if (result.ec != std::errc{}) {
+    throw std::runtime_error("number parsing failed");
+  }
+  return Number(val, 1);
+}
+
+int decimal_places(uint64_t i) {
+  int dec = 0;
+  while (i != 0) {
+    i %= 10;
+    ++dec;
+  }
+  return dec;
+}
+uint64_t ipow10(uint64_t b, uint64_t e) {
+  while (e != 0) {
+    b *= 10;
+    --e;
+  }
+  return b;
+}
+Word makeDec(std::string_view num, std::string_view den) {
+  uint64_t n;
+  auto result = std::from_chars(num.data(), num.data() + num.size(), n);
+  if (result.ec != std::errc{}) {
+    throw std::runtime_error("number parsing failed");
+  }
+  uint64_t d;
+  result = std::from_chars(num.data(), num.data() + num.size(), d);
+  if (result.ec != std::errc{}) {
+    throw std::runtime_error("number parsing failed");
+  }
+  auto dec = decimal_places(d);
+  return Number(ipow10(n, dec) + d, dec);
+}
+} // namespace
+
 std::vector<Word> tokenize(std::string_view input) {
   std::vector<Word> result;
-  auto p = re::Pattern(R"((?:\d+)(?:.\d+)?|[+\-*/^()ie=]|pi|tau|\S)",
-                       re::Options::ucp | re::Options::utf);
+  constexpr auto tokenize =
+      ctre::range<R"((\d+)(?:\.(\d+))?|([+\-*/^()=√])|(pi|tau|[ieπτ])|(\S))">;
   result.reserve(20);
-  for (auto match : p.match(input)) {
-    result.push_back(Word(match));
-  }
-  return result;
-}
-namespace {
-inline bool operator==(const Token &lhs, std::string_view rhs) {
-  return lhs.s == rhs;
-}
-
-int interp_digit(char c) {
-  switch (c) {
-  case '0':
-    return 0;
-  case '1':
-    return 1;
-  case '2':
-    return 2;
-  case '3':
-    return 3;
-  case '4':
-    return 4;
-  case '5':
-    return 5;
-  case '6':
-    return 6;
-  case '7':
-    return 7;
-  case '8':
-    return 8;
-  case '9':
-    return 9;
-  case '.':
-    return -2;
-  default:
-    return -1;
-  }
-}
-struct Result {
-  bool is_number;
-  Number n;
-};
-
-Result parse_number(std::string_view sv) {
-  Number num{0, 1};
-  auto iterator = sv.begin();
-  if (*iterator == '-') {
-    num.den = -1;
-    ++iterator;
-  }
-  {
-    auto c = interp_digit(*iterator++);
-    if (c == -1)
-      return {false};
-    num.num += c;
-    while (iterator != sv.end()) {
-      int c = interp_digit(*iterator++);
-      if (c == -2)
-        break;
-      num.num += c;
-      num.num *= 10;
+  for (auto &&match : tokenize(str_cast(input))) {
+    if (auto num = match.get<1>()) {
+      auto den = match.get<2>();
+      if (!den) {
+        result.push_back(makeNum(str_cast(num)));
+      } else {
+        result.push_back(makeDec(str_cast(num), str_cast(den)));
+      }
+    } else if (auto op = match.get<3>()) {
+      result.push_back(makeOp(str_cast(op)));
+    } else if (auto constant = match.get<4>()) {
+      result.push_back(makeCon(str_cast(constant)));
+    } else if (auto var = match.get<5>()) {
+      result.push_back(Variable(str_cast(var)));
     }
   }
-  while (iterator != sv.end()) {
-    int c = interp_digit(*iterator++);
-    num.num += c;
-    num.num *= 10;
-    num.den *= 10;
-  }
-  return Result{true, num};
-}
-
-Word parse_token(const Word &w) {
-  auto &tok = w.tok;
-  auto result = parse_number(tok.s);
-  if (result.is_number) {
-    return Word(result.n);
-  }
-
-  if (tok == "pi" || tok == "π") {
-    return Word(Constant::Types::pi);
-  } else if (tok == "e") {
-    return Word(Constant::Types::e);
-  } else if (tok == "tau" || tok == "τ") {
-    return Word(Constant::Types::tau);
-  } else if (tok == "i") {
-    return Word(Constant::Types::i);
-  } else if (tok == "+") {
-    return Word(Binary::Ops::add);
-  } else if (tok == "-") {
-    return Word(Binary::Ops::sub);
-  } else if (tok == "/") {
-    return Word(Binary::Ops::div);
-  } else if (tok == "*") {
-    return Word(Binary::Ops::mul);
-  } else if (tok == "^") {
-    return Word(Binary::Ops::exp);
-  } else if (tok == "=") {
-    return Word(Binary::Ops::assign);
-  } else if (tok == "√") {
-    return Word(Unary::Ops::sqrt);
-  }
-  return Word(Variable{tok.s});
+  return result;
 }
 
 // the algorithm basically implements a binary-search-like pattern,
@@ -143,9 +138,6 @@ inline void bin_prefix(std::span<Word> terms, std::span<Word>::iterator op,
 
   recurse(left);
   recurse(right);
-  if (optype == Binary::Ops::div) {
-    fmt::print("div terms: {}\n", fmt::join(terms, " "));
-  }
   if (optype != Binary::Ops::exp) {
     op->bin.second_arg = std::distance(terms.begin(), op) + 1;
     std::ranges::rotate(std::span(terms.begin(), op + 1), op);
@@ -167,11 +159,7 @@ auto find_smallest(std::span<Word> s) {
   }
   return smallest;
 }
-} // namespace
 void parse(std::span<Word> s) {
-  for (auto &w : s) {
-    w = parse_token(w);
-  }
   if (s.size() >= 2) {
     if (s.front() == Word(Binary::Ops::sub))
       s.front() = Word(Unary::Ops::minus);
@@ -183,7 +171,6 @@ void parse(std::span<Word> s) {
   }
   if (s.size() >= 3) {
     auto smallest = find_smallest(s);
-    fmt::print("smallest: {}\n", *smallest);
     bin_prefix(s, smallest, smallest->bin.op);
   }
 }
