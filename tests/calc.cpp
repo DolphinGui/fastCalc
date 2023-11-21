@@ -2,33 +2,32 @@
 #include <fmt/ranges.h>
 
 namespace {
-void print_recurse(calc::Word *w) {
+std::string print_recurse(calc::Word *w) {
+  std::string result;
   if (!w)
-    return;
-  fmt::print("{} ", w->format());
+    return result;
+  result = fmt::format("{} ", w->format());
   if (auto b = dynamic_cast<calc::Binary *>(w)) {
-    print_recurse(b->lhs.get());
+    result.append(print_recurse(b->lhs.get()));
+    result.append(print_recurse(b->rhs.get()));
   }
-  print_recurse(w->child.get());
+  result.append(print_recurse(w->child.get()));
+  return result;
 }
 } // namespace
 
 int main() {
-  constexpr const char *input =
-      "41^504/"
-      "52+tautautau-3313-tautautauipi-41-tautautaupii^"
-      "41/287^i+41^41/53/"
-      "54*pipipi+itaupitautau^tauipi*64/i+64+14+itaupi/"
-      "tau*75*ipitaupipi-tautautauipi+86/"
-      "643^ipitauii-74/"
-      "ipii*iitautaui^63";
+  constexpr const char *input = "v = 3 * 2 + 1 - aπb ^ 2 / i";
+  // = v + * 3 2 - 1 aπ / ^ b 2 i
 
   auto a = calc::tokenize(input);
-
-
-  fmt::print("a:  {}\n", fmt::join(a, " "));
   auto root = calc::parse(std::move(a));
-  fmt::print("out: ");
-  print_recurse(root.get());
-  fmt::print("\n");
+  fmt::print("out: {}\n", print_recurse(root.get()));
+  fmt::print("child: {}\n", print_recurse(root->child.get()));
+  fmt::print(
+      "lhs: {}\n",
+      print_recurse(dynamic_cast<calc::Binary *>(root.get())->lhs.get()));
+  fmt::print(
+      "rhs: {}\n",
+      print_recurse(dynamic_cast<calc::Binary *>(root.get())->rhs.get()));
 }

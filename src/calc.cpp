@@ -3,12 +3,14 @@
 #include <algorithm>
 #include <charconv>
 #include <cstdint>
+#include <exception>
 #include <ranges>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
 
 #include <ctre-unicode.hpp>
+#include <fmt/ranges.h>
 
 namespace calc {
 namespace {
@@ -121,57 +123,51 @@ std::vector<WordPtr> tokenize(std::string_view input) {
 }
 
 WordPtr parse(std::vector<WordPtr> s) {
-  if (s.size() >= 3) {
-
-    // exp has higher precedence than implicit mult, so it must be done first
+  if (s.size() < 3) {
+    return nullptr;
+  }
+  auto associate = [&](Binary::Ops op) {
     for (size_t i = 0; i != s.size(); ++i) {
-      if (auto b = bin_cast(s[i]); b && b->op == Binary::Ops::exp) {
-        b->lhs = std::move(s[i - 1]);
-        b->child = std::move(s[i + 1]);
+      if (auto b = bin_cast(s[i]); b && b->op == op) {
+        b->rhs = std::move(s[i - 1]);
+        b->lhs = std::move(s[i + 1]);
         s.erase(s.begin() + i + 1);
         s.erase(s.begin() + i - 1);
         --i;
       }
     }
+  };
 
-    for (auto &&chunk :
-         s | std::ranges::views::chunk_by([](auto &&a, auto &&b) {
-           auto ab = bin_cast(a);
-           auto bb = bin_cast(b);
-           if (!ab && !bb)
-             return true;
-           if (!ab && bb->op == Binary::Ops::exp)
-             return true;
-           return false;
-         })) {
-      Word *head = chunk.front().get();
-      for (auto &&word : chunk | std::views::drop(1)) {
-        head->child = std::move(word);
-        head = head->child.get();
-      }
-    }
-    auto end = std::ranges::remove_if(s, [](auto &&a) { return !a.get(); });
-    s.erase(end.begin(), end.end());
+  std::ranges::reverse(s);
+  associate(Binary::Ops::exp);
+  std::ranges::reverse(s);
 
-    using enum Binary::Ops;
-    for (auto op = div;
-         std::to_underlying(op) != std::to_underlying(assign) - 1;
-         op = Binary::Ops(std::to_underlying(op) - 1)) {
-      for (size_t i = 0; i != s.size(); ++i) {
-        if (auto b = bin_cast(s[i]); b && b->op == op) {
-          b->lhs = std::move(s[i - 1]);
-          b->child = std::move(s[i + 1]);
-          s.erase(s.begin() + i + 1);
-          s.erase(s.begin() + i - 1);
-          --i;
-        }
-      }
+  for (auto &&chunk : s | std::ranges::views::chunk_by([](auto &&a, auto &&b) {
+                        auto ab = bin_cast(a);
+                        auto a_b = !ab || ab->op == Binary::Ops::exp;
+                        auto bb = bin_cast(b);
+                        auto b_b = !bb || bb->op == Binary::Ops::exp;
+                        return a_b && b_b;
+                      })) {
+    Word *head = chunk.front().get();
+    for (auto &&word : chunk | std::views::drop(1)) {
+      head->child = std::move(word);
+      head = head->child.get();
     }
-    if (s.size() != 1) {
-      throw std::runtime_error("Parsing error: more than one remains");
-    }
-    return std::move(s.front());
   }
-  return nullptr;
+  auto end = std::ranges::remove_if(s, [](auto &&a) { return !a.get(); });
+  s.erase(end.begin(), end.end());
+
+  using enum Binary::Ops;
+  std::ranges::reverse(s);
+  for (auto op = div; std::to_underlying(op) != std::to_underlying(assign) - 1;
+       op = Binary::Ops(std::to_underlying(op) - 1)) {
+    associate(op);
+  }
+
+  if (s.size() != 1) {
+    throw std::runtime_error("Parsing error: more than one remains");
+  }
+  return std::move(s.front());
 }
 } // namespace calc

@@ -139,7 +139,7 @@ struct Binary : Word {
   Binary(Ops t) : op(t) {}
   Binary(Binary &&n) : Word(std::move(n.child)), op(n.op) {}
   bool operator==(const Binary &t) const noexcept { return op == t.op; }
-  WordPtr lhs;
+  WordPtr lhs, rhs;
   std::string format() const override final {
     std::string result = "unknown constant";
     switch (op) {
@@ -190,6 +190,7 @@ template <> struct fmt::formatter<calc::Word *> : fmt::formatter<std::string> {
       return fmt::formatter<std::string>::format("", ctx);
   }
 };
+
 template <> struct fmt::formatter<calc::WordPtr> : fmt::formatter<std::string> {
   auto format(calc::WordPtr const &a, format_context &ctx) const {
     if (a)

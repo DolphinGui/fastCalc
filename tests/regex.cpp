@@ -1,45 +1,8 @@
 #include <ctre-unicode.hpp>
 #include <fmt/core.h>
 #include <string_view>
+#include <random>
 
-// namespace {
-// const char *ops[] = {"-", "+", "*", "/", "^"};
-// const char *rand_op(auto &r) {
-//   std::uniform_int_distribution<uint32_t> rand(0, 4);
-//   return ops[rand(r)];
-// }
-// const char *constants[] = {"pi", "tau", "i"};
-// const char *rand_con(auto &r) {
-//   std::uniform_int_distribution<uint32_t> rand(0, 2);
-//   return constants[rand(r)];
-// }
-// void rand_term(std::string &expression, auto &r) {
-//   std::uniform_int_distribution<uint32_t> rand(1, 6);
-//   uint32_t term_length = rand(r);
-//   std::uniform_int_distribution<uint32_t> rbool(0, 1);
-//   for (uint32_t i = 0; i != term_length; ++i) {
-//     if (rbool(r)) {
-//       expression.append(rand_con(r));
-//     } else {
-//       std::uniform_int_distribution<uint32_t> i(1, 50);
-//       expression.append(std::to_string(i(r)));
-//     }
-//   }
-// }
-// } // namespace
-
-// int main() {
-//   std::random_device r;
-//   std::default_random_engine e(r());
-//   std::string expression;
-//   expression.reserve(500);
-//   for (int i = 0; i != 200; i++) {
-//     rand_term(expression, e);
-//     expression.append(rand_op(e));
-//   }
-//   rand_term(expression, e);
-//   fmt::print("{}\n", expression);
-// }
 constexpr auto tokenize =
     ctre::range<R"((\d+)(?:\.(\d+))?|([+\-*/^()=√])|(pi|tau|[ieπτ])|(\S))">;
 constexpr auto str =
