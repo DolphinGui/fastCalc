@@ -56,7 +56,7 @@ Word makeNum(std::string_view num) {
   uint64_t val;
   auto result = std::from_chars(num.data(), num.data() + num.size(), val);
   if (result.ec != std::errc{}) {
-    throw std::runtime_error("number parsing failed");
+    throw std::runtime_error(fmt::format("number parsing failed: {}", num));
   }
   return Number(val, 1);
 }
@@ -80,12 +80,14 @@ Word makeDec(std::string_view num, std::string_view den) {
   uint64_t n;
   auto result = std::from_chars(num.data(), num.data() + num.size(), n);
   if (result.ec != std::errc{}) {
-    throw std::runtime_error("number parsing failed");
+    throw std::runtime_error(
+        fmt::format("decimal integer parsing failed: {} . {}", num, den));
   }
   uint64_t d;
   result = std::from_chars(num.data(), num.data() + num.size(), d);
   if (result.ec != std::errc{}) {
-    throw std::runtime_error("number parsing failed");
+    throw std::runtime_error(
+        fmt::format("decimal parsing failed: {} . {}", num, den));
   }
   auto dec = decimal_places(d);
   return Number(ipow10(n, dec) + d, dec);
@@ -115,29 +117,52 @@ std::vector<Word> tokenize(std::string_view input) {
   }
   return result;
 }
-
 // the algorithm basically implements a binary-search-like pattern,
 // dividing it up from weakest operand to strongest
 inline void bin_prefix(std::span<Word> terms, std::span<Word>::iterator op,
                        Binary::Ops optype) {
   auto left = std::span(terms.begin(), op);
   auto right = std::span(op + 1, terms.end());
-
-  auto recurse = [&](auto &range) {
-    for (auto op_t = optype; op_t < Binary::Ops::exp + 1;
-         op_t = static_cast<Binary::Ops>(op_t + 1)) {
-      auto pivot = std::ranges::find_if(range, [&](auto &&t) {
-        return t.type == WordType::Binary && t.bin.op == op_t;
-      });
-      if (pivot != range.end()) {
-        bin_prefix(range, pivot, op_t);
-        break;
-      }
+  using std::to_underlying;
+  for (auto op_t = optype;
+       to_underlying(op_t) < to_underlying(Binary::Ops::exp) + 1;
+       op_t = static_cast<Binary::Ops>(to_underlying(op_t) + 1)) {
+    auto pivot = std::ranges::find_if(left, [&](auto &&t) {
+      return t.type == WordType::Binary && t.bin.op == op_t;
+    });
+    if (pivot != left.end()) {
+      bin_prefix(left, pivot, op_t);
+      break;
     }
-  };
+  }
+  for (auto op_t = optype;
+       to_underlying(op_t) < to_underlying(Binary::Ops::exp) + 1;
+       op_t = static_cast<Binary::Ops>(to_underlying(op_t) + 1)) {
+    auto pivot = std::ranges::find_if(right, [&](auto &&t) {
+      return t.type == WordType::Binary && t.bin.op == op_t;
+    });
+    if (pivot != right.end()) {
+      bin_prefix(right, pivot, op_t);
+      break;
+    }
+  }
 
-  recurse(left);
-  recurse(right);
+  // auto recurse = [&](auto &range) {
+  //   for (auto op_t = optype;
+  //        to_underlying(op_t) < to_underlying(Binary::Ops::exp) + 1;
+  //        op_t = static_cast<Binary::Ops>(to_underlying(op_t) + 1)) {
+  //     auto pivot = std::ranges::find_if(range, [&](auto &&t) {
+  //       return t.type == WordType::Binary && t.bin.op == op_t;
+  //     });
+  //     if (pivot != range.end()) {
+  //       bin_prefix(range, pivot, op_t);
+  //       break;
+  //     }
+  //   }
+  // };
+
+  // recurse(left);
+  // recurse(right);
   if (optype != Binary::Ops::exp) {
     op->bin.second_arg = std::distance(terms.begin(), op) + 1;
     std::ranges::rotate(std::span(terms.begin(), op + 1), op);

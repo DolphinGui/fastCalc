@@ -1,10 +1,10 @@
 #pragma once
 
+#include "fast_calc/smol_str.hpp"
 #include <cstdint>
 #include <fmt/format.h>
 #include <span>
 #include <stdexcept>
-#include <string>
 #include <vector>
 
 namespace fcalc {
@@ -28,25 +28,24 @@ inline bool is_value(WordType w) noexcept {
   using enum WordType;
   return w == Number || w == Constant || w == Variable;
 }
+
 struct Token {
   std::string s;
-  Token(std::string &&s) : s(std::move(s)) {}
-  Token(std::string_view s) : s(std::move(s)) {}
-  Token(Token &&other) : s(std::move(other.s)) {}
-  Token &operator=(Token &&t) {
-    std::swap(s, t.s);
-    return *this;
-  }
-  Token(const Token &other) : s(other.s) {}
-  Token &operator=(const Token &t) {
-    s = t.s;
-    return *this;
-  }
+  Token() = default;
+  Token(std::string_view s) : s(s) {}
+  friend void swap(Token &a, Token &b) { swap(a.s, b.s); }
   bool operator==(const Token &t) const noexcept { return s == t.s; }
 };
 struct Number {
   uint64_t num;
-  int64_t den;
+  int64_t den = 1;
+  Number() = default;
+  Number(int64_t i) : num(i) { den = i < 0 ? -1 : 1; }
+  Number(uint64_t n, int64_t d) : num(n), den(d) {}
+  friend void swap(Number &a, Number &b) {
+    std::swap(a.num, b.num);
+    std::swap(a.den, b.den);
+  }
   bool operator==(const Number &t) const noexcept {
     return num == t.num && den == t.den;
   }
@@ -55,22 +54,13 @@ struct Constant {
   enum struct Types { pi, e, tau, i } type;
   Constant() = default;
   Constant(Types t) : type(t) {}
+  friend void swap(Constant &a, Constant &b) { std::swap(a.type, b.type); }
   bool operator==(const Constant &t) const noexcept { return type == t.type; }
 };
 struct Variable {
   std::string s;
-  Variable(std::string &&s) : s(std::move(s)) {}
-  Variable(std::string_view s) : s(std::move(s)) {}
-  Variable(Token &&other) : s(std::move(other.s)) {}
-  Variable &operator=(Variable &&t) {
-    std::swap(s, t.s);
-    return *this;
-  }
-  Variable(const Variable &other) : s(other.s) {}
-  Variable &operator=(const Variable &t) {
-    s = t.s;
-    return *this;
-  }
+  Variable() = default;
+  Variable(std::string_view s) : s(s) {}
   bool operator==(const Variable &t) const noexcept { return s == t.s; }
 };
 struct Unary {
@@ -80,7 +70,7 @@ struct Unary {
   bool operator==(const Unary &t) const noexcept { return op == t.op; }
 };
 struct Binary {
-  enum Ops : uint8_t {
+  enum struct Ops : uint8_t {
     assign,
     add,
     sub,
@@ -88,6 +78,7 @@ struct Binary {
     div,
     exp,
   } op;
+  using enum Ops;
 
   friend inline std::string_view format_as(Ops o) noexcept {
     switch (o) {
@@ -167,20 +158,18 @@ struct Word {
   }
 #undef X
 
-  // this delegates to copy constructor. this is also utterly sketchy.
-  Word &operator=(const Word &other) {
-    this->~Word();
-    new (this) Word(other);
-    return *this;
-  }
-
+  // this is sketchy but I can't think of a better way to swap variants
   friend void swap(Word &a, Word &b) {
-    auto tmp = Word(a);
-    a = b;
-    b = tmp;
+    char tmp[sizeof(a._raw)];
+    std::memcpy(tmp, &a._raw, 16);
+    auto tmp_type = a.type;
+    std::memcpy(&a._raw, &b._raw, 16);
+    a.type = b.type;
+    std::memcpy(&b._raw, tmp, 16);
+    b.type = tmp_type;
   }
 
-  Word &operator=(Word &&other) {
+  Word &operator=(Word other) {
     swap(*this, other);
     return *this;
   }
@@ -204,7 +193,11 @@ struct Word {
     Variable var;
     Unary un;
     Binary bin;
+    // this exists to avoid Wclass-memaccess
+    char _raw[sizeof(tok)];
   };
+
+  // static_assert(sizeof(Token) == 16, "Token size has changed");
 
   WordType type;
 };
