@@ -1,11 +1,33 @@
+#include <algorithm>
 #include <benchmark/benchmark.h>
 #include <cstdint>
 #include <fast_calc/fcalc.hpp>
 #include <fmt/core.h>
+#include <gperftools/malloc_hook.h>
 #include <random>
 #include <test/calc.hpp>
 #include <type_traits>
 #include <vector>
+
+benchmark::IterationCount g_num_new = 0;
+benchmark::IterationCount g_sum_size_new = 0;
+auto new_hook = [](const void *, size_t s) {
+  benchmark::IterationCount size = s;
+  ++g_num_new;
+  g_sum_size_new += size;
+};
+
+#define BEFORE_TEST()                                                          \
+  benchmark::IterationCount num_new = g_num_new;                               \
+  benchmark::IterationCount sum_size_new = g_sum_size_new;                     \
+  MallocHook::AddNewHook(new_hook)
+
+#define AFTER_TEST()                                                           \
+  MallocHook::RemoveNewHook(new_hook);                                         \
+  auto iter = double(state.iterations());                                      \
+  state.counters["allocs"] = (g_num_new - num_new) / iter;                     \
+  state.counters["avg alloc"] =                                                \
+      (g_sum_size_new - sum_size_new) / double(g_num_new - num_new);
 
 namespace {
 const char *ops[] = {"-", "+", "*", "/", "^"};
@@ -170,51 +192,71 @@ auto gen_exp(uint32_t terms, uint32_t term_size) {
 } // namespace f_gen
 } // namespace
 
-void fcalc_bench(benchmark::State &s) {
-  std::string expression = gen_expression(s.range(0), s.range(1));
-  for (auto _ : s) {
+void fcalc_bench(benchmark::State &state) {
+  BEFORE_TEST();
+  std::string expression = gen_expression(state.range(0), state.range(1));
+  for (auto _ : state) {
     auto n = fcalc::tokenize(expression);
     fcalc::parse(n);
     benchmark::DoNotOptimize(n);
+    benchmark::ClobberMemory();
   }
-  s.SetComplexityN(expression.size());
+  state.SetComplexityN(expression.size());
+  state.counters["data size"] = expression.size();
+  state.counters["efficiency"] =
+      (g_sum_size_new - sum_size_new) / double(expression.size());
+  AFTER_TEST();
 }
 BENCHMARK(fcalc_bench)->Ranges({{8 << 5, 8 << 10}, {2, 8}})->Complexity();
 
-void ccalc_bench(benchmark::State &s) {
-  std::string expression = gen_expression(s.range(0), s.range(1));
-  for (auto _ : s) {
+void ccalc_bench(benchmark::State &state) {
+  BEFORE_TEST();
+  std::string expression = gen_expression(state.range(0), state.range(1));
+  for (auto _ : state) {
     auto n = calc::tokenize(expression);
     auto r = calc::parse(std::move(n));
     benchmark::DoNotOptimize(r);
+    benchmark::ClobberMemory();
   }
-  s.SetComplexityN(expression.size());
+  state.SetComplexityN(expression.size());
+  state.counters["data size"] = expression.size();
+  state.counters["efficiency"] =
+      (g_sum_size_new - sum_size_new) / double(expression.size());
+  AFTER_TEST();
 }
-BENCHMARK(ccalc_bench)
-    ->Ranges({{8 << 5, 8 << 10}, {2, 8}})
-    ->Complexity(benchmark::oNLogN);
+BENCHMARK(ccalc_bench)->Ranges({{8 << 5, 8 << 10}, {2, 8}})->Complexity();
 
-void fcalc_parse(benchmark::State &s) {
-  for (auto _ : s) {
-    s.PauseTiming();
-    auto a = f_gen::gen_exp(s.range(0), s.range(1));
-    s.ResumeTiming();
+void fcalc_parse(benchmark::State &state) {
+  BEFORE_TEST();
+  for (auto _ : state) {
+    state.PauseTiming();
+    auto a = f_gen::gen_exp(state.range(0), state.range(1));
+    state.ResumeTiming();
     fcalc::parse(a);
     benchmark::DoNotOptimize(a);
   }
-  s.SetComplexityN(s.range(0) * s.range(1));
+  state.SetComplexityN(state.range(0) * state.range(1));
+  state.counters["data num"] = state.range(0) * state.range(1) * 2;
+  state.counters["byte/word"] =
+      (g_sum_size_new - sum_size_new) / state.counters["data num"];
+  AFTER_TEST();
 }
 BENCHMARK(fcalc_parse)->Ranges({{8 << 5, 8 << 7}, {2, 8}})->Complexity();
 
-void ccalc_parse(benchmark::State &s) {
-  for (auto _ : s) {
-    s.PauseTiming();
-    auto expression = c_gen::gen_exp(s.range(0), s.range(1));
-    s.ResumeTiming();
+void ccalc_parse(benchmark::State &state) {
+  BEFORE_TEST();
+  for (auto _ : state) {
+    state.PauseTiming();
+    auto expression = c_gen::gen_exp(state.range(0), state.range(1));
+    state.ResumeTiming();
     auto r = calc::parse(std::move(expression));
     benchmark::DoNotOptimize(r);
   }
-  s.SetComplexityN(s.range(0) * s.range(1));
+  state.SetComplexityN(state.range(0) * state.range(1));
+  state.counters["data num"] = state.range(0) * state.range(1) * 2;
+  state.counters["byte/word"] =
+      (g_sum_size_new - sum_size_new) / state.counters["data num"];
+  AFTER_TEST();
 }
 BENCHMARK(ccalc_parse)
     ->Ranges({{8 << 5, 8 << 7}, {2, 8}})

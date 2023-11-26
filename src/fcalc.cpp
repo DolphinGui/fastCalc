@@ -124,45 +124,23 @@ inline void bin_prefix(std::span<Word> terms, std::span<Word>::iterator op,
   auto left = std::span(terms.begin(), op);
   auto right = std::span(op + 1, terms.end());
   using std::to_underlying;
-  for (auto op_t = optype;
-       to_underlying(op_t) < to_underlying(Binary::Ops::exp) + 1;
-       op_t = static_cast<Binary::Ops>(to_underlying(op_t) + 1)) {
-    auto pivot = std::ranges::find_if(left, [&](auto &&t) {
-      return t.type == WordType::Binary && t.bin.op == op_t;
-    });
-    if (pivot != left.end()) {
-      bin_prefix(left, pivot, op_t);
-      break;
-    }
-  }
-  for (auto op_t = optype;
-       to_underlying(op_t) < to_underlying(Binary::Ops::exp) + 1;
-       op_t = static_cast<Binary::Ops>(to_underlying(op_t) + 1)) {
-    auto pivot = std::ranges::find_if(right, [&](auto &&t) {
-      return t.type == WordType::Binary && t.bin.op == op_t;
-    });
-    if (pivot != right.end()) {
-      bin_prefix(right, pivot, op_t);
-      break;
-    }
-  }
 
-  // auto recurse = [&](auto &range) {
-  //   for (auto op_t = optype;
-  //        to_underlying(op_t) < to_underlying(Binary::Ops::exp) + 1;
-  //        op_t = static_cast<Binary::Ops>(to_underlying(op_t) + 1)) {
-  //     auto pivot = std::ranges::find_if(range, [&](auto &&t) {
-  //       return t.type == WordType::Binary && t.bin.op == op_t;
-  //     });
-  //     if (pivot != range.end()) {
-  //       bin_prefix(range, pivot, op_t);
-  //       break;
-  //     }
-  //   }
-  // };
+  auto recurse = [&](auto &range) {
+    for (auto op_t = optype;
+         to_underlying(op_t) < to_underlying(Binary::Ops::exp) + 1;
+         op_t = static_cast<Binary::Ops>(to_underlying(op_t) + 1)) {
+      auto pivot = std::ranges::find_if(range, [&](auto &&t) {
+        return t.type == WordType::Binary && t.bin.op == op_t;
+      });
+      if (pivot != range.end()) {
+        bin_prefix(range, pivot, op_t);
+        break;
+      }
+    }
+  };
 
-  // recurse(left);
-  // recurse(right);
+  recurse(left);
+  recurse(right);
   if (optype != Binary::Ops::exp) {
     op->bin.second_arg = std::distance(terms.begin(), op) + 1;
     std::ranges::rotate(std::span(terms.begin(), op + 1), op);

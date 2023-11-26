@@ -89,7 +89,7 @@ WordPtr makeDec(std::string_view num, std::string_view den) {
     throw std::runtime_error("number parsing failed");
   }
   uint64_t d;
-  result = std::from_chars(num.data(), num.data() + num.size(), d);
+  result = std::from_chars(den.data(), den.data() + den.size(), d);
   if (result.ec != std::errc{}) {
     throw std::runtime_error("number parsing failed");
   }

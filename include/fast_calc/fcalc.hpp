@@ -30,7 +30,7 @@ inline bool is_value(WordType w) noexcept {
 }
 
 struct Token {
-  std::string s;
+  SmolString s;
   Token() = default;
   Token(std::string_view s) : s(s) {}
   friend void swap(Token &a, Token &b) { swap(a.s, b.s); }
@@ -58,7 +58,7 @@ struct Constant {
   bool operator==(const Constant &t) const noexcept { return type == t.type; }
 };
 struct Variable {
-  std::string s;
+  SmolString s;
   Variable() = default;
   Variable(std::string_view s) : s(s) {}
   bool operator==(const Variable &t) const noexcept { return s == t.s; }
@@ -160,7 +160,7 @@ struct Word {
 
   // this is sketchy but I can't think of a better way to swap variants
   friend void swap(Word &a, Word &b) {
-    char tmp[sizeof(a._raw)];
+    char tmp[sizeof(Token)];
     std::memcpy(tmp, &a._raw, 16);
     auto tmp_type = a.type;
     std::memcpy(&a._raw, &b._raw, 16);
@@ -188,7 +188,7 @@ struct Word {
 
   union {
     Token tok;
-    Number num;
+    Number num{};
     Constant con;
     Variable var;
     Unary un;
@@ -197,7 +197,7 @@ struct Word {
     char _raw[sizeof(tok)];
   };
 
-  // static_assert(sizeof(Token) == 16, "Token size has changed");
+  static_assert(sizeof(Token) == 16, "Token size has changed");
 
   WordType type;
 };
@@ -211,7 +211,7 @@ template <>
 struct fmt::formatter<fcalc::Token> : fmt::formatter<std::string_view> {
   constexpr auto format(const fcalc::Token &t, format_context &ctx) const
       -> format_context::iterator {
-    return formatter<string_view>::format(t.s, ctx);
+    return formatter<string_view>::format(t.s.view(), ctx);
   }
 };
 

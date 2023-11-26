@@ -8,7 +8,6 @@ cmake = import('cmake')
 ctre_proj = cmake.subproject('ctre')
 ctre = ctre_proj.dependency('ctre')
 
-
 fmt = dependency('fmt', include_type : 'system')
 
 fcalc = library('fcalc', ['src/fcalc.cpp'], 
@@ -18,11 +17,12 @@ calc = library('calc', ['src/calc.cpp'],
 
 gbenchmark = dependency('benchmark', include_type : 'system')
 gtest = dependency('gtest', include_type : 'system')
+tcmalloc = dependency('libtcmalloc')
 
 executable('calc', 'src/main.cpp',dependencies: [fmt, gbenchmark],
     include_directories : include_directories('include'), link_with: fcalc)
 
-parse_bench = executable('parsing_benchmark', 'tests/parse_bench.cpp', dependencies: [fmt, gbenchmark],
+parse_bench = executable('parsing_benchmark', 'tests/parse_bench.cpp', dependencies: [fmt, gbenchmark, tcmalloc],
     include_directories : include_directories('include'), link_with: [fcalc, calc])
 benchmark('parsing benchmark', parse_bench)
 

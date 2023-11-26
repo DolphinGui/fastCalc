@@ -29,7 +29,6 @@ struct Token : Word {
     std::swap(s, t.s);
     return *this;
   }
-  Token(const Token &other) : s(other.s) {}
   Token &operator=(const Token &t) {
     s = t.s;
     return *this;
@@ -96,7 +95,7 @@ struct Variable : Word {
     std::swap(s, t.s);
     return *this;
   }
-  Variable(const Variable &other) : s(other.s) {}
+
   Variable &operator=(const Variable &t) {
     s = t.s;
     return *this;
